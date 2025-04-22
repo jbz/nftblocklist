@@ -106,11 +106,8 @@ load()
 
 	log 6 "Loading static blocklist into persistent set..."
 
-    echo "nft add element $NFTABLES_FILTER $BLOCKLIST_PERSISTENT_SET { $(echo '$@' | tr " " "," ) }"
-
-
     /usr/bin/xargs -n1000 /bin/sh -c '
-      nft add element $NFTABLES_FILTER $BLOCKLIST_PERSISTENT_SET { $(
+      nft add element $NFTABLES_FILTER $BLOCKLIST_PERSISTENT_S { $(
         echo "$@" | tr " " ","
         ) }' -- < $BLOCKLIST_LOCATION
 	#echo add element $NFTABLES_FILTER $BLOCKLIST_PERSISTENT_SET { $(/usr/bin/awk '{print $1 ", "}' $BLOCKLIST_LOCATION) } | /usr/sbin/nft -f -
