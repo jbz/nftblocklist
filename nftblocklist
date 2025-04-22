@@ -1,0 +1,169 @@
+#!/bin/bash
+
+# nftblocklist - a script to manage dynamic and persistent IP blocklists using nftables.
+#
+#	Requirements:  nftables, iprange, jq, json_pp 
+
+
+## Default values
+
+# Default config file location
+export CONFIG_LOCATION="/etc/nftables.conf"
+
+# Default persistent blocklist file location
+export BLOCKLIST_LOCATION="/etc/nftables.blocklist"
+
+# Default manual blocklist input file location
+export BLOCKLIST_OVERRIDE_LOCATION="/etc/nftables.blockcidrs"
+
+# Default temp file for blocklist processing
+export BLOCKLIST_TMP_LOCATION="/tmp/nftblocklist.tmp"
+
+# Default nft filter name
+export NFTABLES_FILTER="inet filter"
+
+# Default dynamic blocklist set name
+export BLOCKLIST_DYN_SET="blocklist_dyn"
+
+# Default persistent blocklist set name
+export BLOCKLIST_PERSISTENT_SET="blocklist_persist"
+
+
+## Handle logging/output with verbosity levels
+# set default verbosity level to crit
+VERBOSITY=2
+
+declare -A LOG_LEVELS
+# https://en.wikipedia.org/wiki/Syslog#Severity_level
+LOG_LEVELS=([0]="emerg" [1]="alert" [2]="crit" [3]="err" [4]="warning" [5]="notice" [6]="info" [7]="debug")
+
+function log ()
+{
+  local LEVEL=${1}
+  shift
+  if [ ${VERBOSITY} -ge ${LEVEL} ]; then
+    if [ -t 0 ]; then
+      # seems we are in an interactive shell
+      echo "[${LOG_LEVELS[$LEVEL]}]" "$@" >&2
+    else
+      # seems we are in a cron job
+      logger -p "${LOG_LEVELS[$LEVEL]}" -t "$0[$$]" -- "NFTBLOCKLIST: $*"
+    fi
+  fi
+}
+
+
+## Primary functions
+
+help() 
+{
+	# Display help text
+	echo
+	echo "nftblocklist - a script to manage a persistent nftables IPv4 blocklist."
+	echo
+	echo "Syntax: $0 [-h] [-d|dump] [-l|load] [-r|reload]"
+	echo "-d|dump		Dump current nftables dynamic blocklist and combine with persistent list to create new static blocklist."
+	echo "-l|load		Flush persistent blocklist set in nftables, then load persistent list to blocklist set."
+	echo "-r|reload		Dump new blocklist, then flush persistent blocklist set and load static list.  Does not restart nftables."
+	echo 
+}
+
+dump()
+{
+	# Dump nftables dynamic blocklist, combine with existing static blocklist, and optimize to new static blocklist
+	log 6  "Dumping nftables dynamic blocklist..."
+
+	# Dump current dynamic blocklist set contents from nft; use jq and grep to convert to a file with 1 ipv4addr per line
+	/usr/sbin/nft -j list ruleset | \
+	/usr/bin/json_pp | \
+	/usr/bin/jq '.[]|.[]|.[]| select(.name=="'$BLOCKLIST_DYN_SET'")|.elem' | \
+	grep -o '[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}' > $BLOCKLIST_TMP_LOCATION
+
+	log 6 "Combining existing blocklist and manual ranges, then optimizing..."
+
+	# Append the current blocklist file contents
+	cat $BLOCKLIST_LOCATION >> $BLOCKLIST_TMP_LOCATION
+
+	# Use iprange to merge and optimize the list, and include the manual file if it exists
+	if [ -e $BLOCKLIST_OVERRIDE_LOCATION ]; then
+		/usr/bin/iprange $BLOCKLIST_OVERRIDE_LOCATION $BLOCKLIST_TMP_LOCATION > $BLOCKLIST_LOCATION
+	else
+		/usr/bin/iprange $BLOCKLIST_TMP_LOCATION > $BLOCKLIST_LOCATION
+	fi
+
+	# Clean up
+	/bin/rm -f $BLOCKLIST_TMP_LOCATION
+
+	log 6 "Blocklist dump and optimize complete! New blocklist saved to $BLOCKLIST_LOCATION"
+}
+
+
+load() 
+{
+	# Flush persistent set in nftables, then load static blocklist into persistent set
+	log 6 "FLushing persistent blocklist set in nftables..."
+	/usr/sbin/nft flush set $NFTABLES_FILTER $BLOCKLIST_PERSISTENT_SET
+
+	log 6 "Loading static blocklist into persistent set..."
+	echo add element $NFTABLES_FILTER $BLOCKLIST_PERSISTENT_SET { $(/usr/bin/awk '{print $1 ", "}' $BLOCKLIST_LOCATION) } | /usr/sbin/nft -f -
+}
+
+flushdynblocklist()
+{
+	# Flush the dynamic blocklist set
+	log 6 "Flushing the dynamic blocklistt..."
+	/usr/sbin/nft flush set $NFTABLES_FILTER $BLOCKLIST_DYN_SET
+
+}
+
+
+# Handle options and execute
+
+while getopts ":v" opt; do
+    case $opt in
+        v)
+	  if (( VERBOSITY < 7 )); then
+	    ((VERBOSITY++))
+	  fi
+        ;;
+    esac
+done
+
+log 6 "Verbosity level set to $VERBOSITY"
+
+OPTSTRING=":hdlrin"
+
+while getopts ${OPTSTRING} opt; do
+  case ${opt} in
+    h)
+      help
+      exit;;
+    d)
+      dump
+      exit;;
+    l)
+      load 
+      exit;;
+    r)
+      dump
+      load
+      flushdynblocklist
+      exit;;
+    n)
+      # Null - do nothing
+      log 6 "Null action option detected!"
+      exit;;
+    :)
+      log 3 "Option -${OPTARG} requires an argument."
+      exit 1
+      ;;
+    \?)
+      log 3 "Invalid option: -${OPTARG}."
+      exit 1
+      ;;
+  esac
+done
+
+echo "done!"
+exit
+

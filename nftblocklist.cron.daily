@@ -1,0 +1,11 @@
+#!/bin/bash
+
+nft -j list ruleset | \
+json_pp | \
+jq '.[]|.[]|.[]| select(.name=="blocklist_dyn")|.elem' | \
+grep -o '[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}' > \
+/etc/nftables.blocklist.tmp
+
+iprange /etc/nftables.blockcidrs /etc/nftables.blocklist.tmp > /etc/nftables.blocklist
+
+logger "NFT cron: Dumped nft blocklist to /etc/nftables.blocklist"

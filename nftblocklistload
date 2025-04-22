@@ -1,0 +1,19 @@
+#!/bin/bash
+
+
+export FILE_LOCATION="/etc/nftables.blocklist"
+export TARGET_SET="blocklist_persist"
+
+if [ ! -z "$1" ]; then
+	export FILE_LOCATION=$1;
+	# echo $FILE_LOCATION;
+fi
+
+if [ ! -z "$2" ]; then
+	export TARGET_SET=$2;
+	# echo $TARGET_SET;
+fi
+
+nft flush set inet filter $TARGET_SET
+
+echo add element inet filter $TARGET_SET { $(awk '{print $1 ", "}' $FILE_LOCATION) } | nft -f -

@@ -1,0 +1,4 @@
+#!/bin/bash
+
+/usr/sbin/nft -f /etc/nftables.conf
+/usr/sbin/nftblocklistload

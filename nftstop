@@ -1,0 +1,4 @@
+#!/bin/bash
+
+/etc.cron.daily/nftblocklist
+/usr/sbin/nft flush ruleset
