@@ -62,9 +62,9 @@ help()
 	echo "nftblocklist - a script to manage a persistent nftables IPv4 blocklist."
 	echo
 	echo "Syntax: $0 [-h] [-d|dump] [-l|load] [-r|reload]"
-	echo "-d|dump		Dump current nftables dynamic blocklist and combine with persistent list to create new static blocklist."
-	echo "-l|load		Flush persistent blocklist set in nftables, then load persistent list to blocklist set."
-	echo "-r|reload		Dump new blocklist, then flush persistent blocklist set and load static list.  Does not restart nftables."
+	echo "-d|dump       Dump current nftables dynamic blocklist and combine with persistent list to create new static blocklist."
+	echo "-l|load       Flush persistent blocklist set in nftables, then load persistent list to blocklist set."
+	echo "-r|reload     Dump new blocklist, then flush persistent blocklist set and load static list.  Does not restart nftables."
 	echo 
 }
 
@@ -105,13 +105,21 @@ load()
 	/usr/sbin/nft flush set $NFTABLES_FILTER $BLOCKLIST_PERSISTENT_SET
 
 	log 6 "Loading static blocklist into persistent set..."
-	echo add element $NFTABLES_FILTER $BLOCKLIST_PERSISTENT_SET { $(/usr/bin/awk '{print $1 ", "}' $BLOCKLIST_LOCATION) } | /usr/sbin/nft -f -
+
+    echo "nft add element $NFTABLES_FILTER $BLOCKLIST_PERSISTENT_SET { $(echo '$@' | tr " " "," ) }"
+
+
+    /usr/bin/xargs -n1000 /bin/sh -c '
+      nft add element $NFTABLES_FILTER $BLOCKLIST_PERSISTENT_SET { $(
+        echo "$@" | tr " " ","
+        ) }' -- < $BLOCKLIST_LOCATION
+	#echo add element $NFTABLES_FILTER $BLOCKLIST_PERSISTENT_SET { $(/usr/bin/awk '{print $1 ", "}' $BLOCKLIST_LOCATION) } | /usr/sbin/nft -f -
 }
 
 flushdynblocklist()
 {
 	# Flush the dynamic blocklist set
-	log 6 "Flushing the dynamic blocklistt..."
+	log 6 "Flushing the dynamic blocklist..."
 	/usr/sbin/nft flush set $NFTABLES_FILTER $BLOCKLIST_DYN_SET
 
 }
@@ -131,9 +139,8 @@ done
 
 log 6 "Verbosity level set to $VERBOSITY"
 
-OPTSTRING=":hdlrin"
-
-while getopts ${OPTSTRING} opt; do
+OPTIND=0
+while getopts ":hdlrinv" opt; do
   case ${opt} in
     h)
       help
@@ -153,6 +160,9 @@ while getopts ${OPTSTRING} opt; do
       # Null - do nothing
       log 6 "Null action option detected!"
       exit;;
+    v)
+      # we've already processed these above, ignore
+      ;;
     :)
       log 3 "Option -${OPTARG} requires an argument."
       exit 1
