@@ -1,5 +1,8 @@
 #!/bin/bash
 
+yell() { echo "$0: $*" >&2; }
+die() { yell "$*"; exit 111; }
+try() { "$@" || die "cannot $*"; }
 
 export FILE_LOCATION="/etc/nftables.blocklist"
 export TARGET_SET="blocklist_persist"
@@ -17,3 +20,5 @@ fi
 nft flush set inet filter $TARGET_SET
 
 echo add element inet filter $TARGET_SET { $(awk '{print $1 ", "}' $FILE_LOCATION) } | nft -f -
+
+true

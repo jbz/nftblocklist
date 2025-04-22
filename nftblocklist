@@ -1,8 +1,18 @@
 #!/bin/bash
 
+yell() { echo "$0: $*" >&2; }
+die() { yell "$*"; exit 111; }
+try() { "$@" || die "cannot $*"; }
+
 # nftblocklist - a script to manage dynamic and persistent IP blocklists using nftables.
 #
 #   Requirements:  nftables, iprange, jq, json_pp 
+
+_requirements="nft iprange jq json_pp awk tr grep"
+
+for i in `echo "${_requirements}"` ; do
+  try which "${i}" >> /dev/null
+done
 
 
 ## Default values
@@ -169,3 +179,4 @@ done
 echo "done!"
 exit
 
+true
