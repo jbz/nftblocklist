@@ -1,33 +1,30 @@
-JB's nftables customizations
+## nftblocklist
+*nftblocklist* is a script and associated config files that will allow you to maintain a persistent-across-restart IPv4 blocklist using `nftables` on Ubunutu 22+. 
 
-These files are meant to be applied overtop the standard Ubuntu 22.04 install
-of `nftables`.  
+### DISCLAIMER and LICENSE
+I am not a firewall engineer, nor am I a developer; this script and its associated files are a 'works for me' solution.  I post it in the hopes that it may be useful to others who, like me, went to the internet looking for recommendations on how to manage IP blocking on their nftables installation and to have those blocklists maintained across service and system restarts.
+  
+This software is licensed under the license contained in this repo at /LICENSE.  The contents have been assembled from various internet answers as well as some light and hopefully not regrettable original scripting by myself.
 
-Functionality:
-
-The nftables.conf file, meant for /etc/nftables.conf, sets up a relatively simple nftable firewall with some add'l functionality such as whitelisting IPs,
-blocking all SSH traffic from anywhere except those whitelisted IPs, dropping
-trash traffic, and permitting HTTP/HTTPS traffic through.  It also permits 
-connections to a custom ZNC server running on a designated port.
-
-Very basic block/ban is in place here.  Anyone trying to SSH spoof more than 
-three times (i.e. make a connection from anywhere but a whitelist) is added to the blocklist.  Any IP that tries to make more than 10 connections within a designated period by means other than the permitted traffic above is added to the blocklist.
-
-There are two blocklists here, because the dynamic blocklist can't handle the 'interval' flag and thus can't manage single IPs as well as ranges.  At service stop, or daily via cron, the 'nftblocklistdump' script should be run.  This script dumps the current blocklist (it's a bit more complex, see below).
-
-The scripts meant for /usr/sbin are as follows.
-
-nftblocklistdump:
-
-This script (which requires the 'iprange' tool, avaiable via apt) dumps the current blocklist information via the following process.  First, it dumps the 'blocklist_dyn' set via json pp, and runs a jq query to extract just the IP addresses from that output, and sends it (destructively) to /etc/nftables.blocklist.tmp.  Next, it actually cat-appends the contents of the current blocklist file at /etc/nftables.blocklist to that temp file.  The reason it does this is that the dump process doesn't handle *ranges*, and the goal of this is to come up with an optimized blocklist that contains both singletons and ranges.  Only the blocklist_persist set (which has the 'interval' flag) can handle this.
-Once it has the tmpfile ready, it runs an iprange merge and optimize, resulting in a single list which it destructively writes to /etc/nftables.blocklist.  It runs this optimize on a merge of the tmp blocklist and on a file named 'nftables.blockcidrs' which contains any manually entered list of CIDR ranges (to permit you to manually block wide CIDR blocks that haven't tripped the autoban fully).
+  
+### Repo Contents
+The repository contains the primary script (`nftblocklist`) as well as configuration files.  The configuration files are meant to permit modification of the `nftables` systemd entry to support the nftblocklist workflow.
 
 
-nftblocklistload:
-this takes each line of the nftables.blocklist and executes an 'nft set add' operation to add them to the appropriate blocklist_persist table. I should probably have it flush that table first to avoid conflict?  Heh.
+##### nftblocklist
+This bash script performs the actual operations.  It has a `-h` flag which will provide current capabilities and syntax.  It is meant to be installed in `/usr/sbin` or similar.  If used with the `-v` flag, it will output step and progress information.
 
-nftstart:
-A script to start nft then run nftblocklistload, which is called from the systemd service file for nftables via ExecStart=
+This script has its operations configured via variables, which are labeled and identified within the script.  You are encouraged to test and configure the script to meet your `nftables` setup requirements (filter names, set names, etc.) which you can do using flags to specify them, and then modify the defaults in the script to permit bare invocation of the script to work.  By default, the script will only output messages of `err` or 'lower' (more important) loglevel; adding '-v' will increase verbosity.
 
-nftstop:
-A script to first dump the blocklist, then flush the rulesets for nft, which is called from the systemd service file for nftables via ExecStop=
+I encourage you to look at the script's contents for more information on what it's doing and how.
+
+
+##### nftables.conf
+This file is an example config file for `nftables` which (on Ubuntu 22.04, at least) lives at `/etc/nftables.conf`.  This configuration will set up nftables to deliver the basic functionality described below under [Default Functionality].  Using this file should guarantee that the script's default values function as intended.
+
+
+##### nftstart / nftstop
+These are simple scripts that should be placed in `/usr/sbin/` which should be called by systemd when nftables is started, stopped or reloaded.  These scripts are referenced in nftables.service, and are invoked using `ExecStart=`, `ExecStop=` and `ExecReload=`.
+
+##### nftblocklist.cron.daily
+A sample crontab file that can be placed in `/etc/cron.daily` to implement the scheduled functionality described in [Default Functionality].
