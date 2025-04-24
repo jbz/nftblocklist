@@ -41,8 +41,8 @@ export BLOCKLIST_PERSISTENT_SET="blocklist_persist"
 
 
 ## Handle logging/output with verbosity levels
-# set default verbosity level to crit
-VERBOSITY=2
+# set default verbosity level to notice
+VERBOSITY=5
 
 declare -A LOG_LEVELS
 # https://en.wikipedia.org/wiki/Syslog#Severity_level
@@ -76,6 +76,8 @@ help()
     echo "-d|dump       Dump current nftables dynamic blocklist and combine with persistent list to create new static blocklist."
     echo "-l|load       Flush persistent blocklist set in nftables, then load persistent list to blocklist set."
     echo "-r|reload     Dump new blocklist, then flush persistent blocklist set and load static list.  Does not restart nftables."
+    echo "-n|null       Dry run - don't actually make changes, just log.  Best used with -v or -vv."
+    echo "-v|verbose    Increase verbosity/raise log level.  Default is log level 5 (notice) so -v or -vv will increase to 6 (info) or 7 (debug)."
     echo 
 }
 
@@ -143,8 +145,16 @@ done
 log 6 "Verbosity level set to $VERBOSITY"
 
 OPTIND=0
-while getopts ":hdlrinv" opt; do
+while getopts ":h:f:sdlrnv:" opt; do
   case ${opt} in
+    f)
+      export BLOCKLIST_LOCATION=${OPTARG}
+      log 7 "Blocklist file location: $BLOCKLIST_LOCATION"
+      ;;
+    s)
+      export BLOCKLIST_PERSISTENT_SET=${OPTARG}
+      log 7 "Blocklist persistent set name: $BLOCKLIST_PERSISTENT_SET"
+      ;;
     h)
       help
       exit;;
