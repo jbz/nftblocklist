@@ -19,13 +19,13 @@ done
 ## Default values
 
 # Default config file location
-export NFTABLES_CONFIG_LOCATION="${NFTABLES_CONFIG_LOCATION{:-/etc/nftables.conf}"
+export NFTABLES_CONFIG_LOCATION="${NFTABLES_CONFIG_LOCATION:-/etc/nftables.conf}"
 
 # Default persistent blocklist file location
-export BLOCKLIST_LOCATION="${NFTABLES_CONFIG_LOCATION:-/etc/nftables.blocklist}"
+export BLOCKLIST_LOCATION="${BLOCKLIST_LOCATION:-/etc/nftables.blocklist}"
 
-# Locaiton of blocklist to load/combine
-export BLOCKLIST_INPUT="${BLOCKLIST_LOCATION:-BLOCKLIST_LOCATION}"
+# Default Location of blocklist to load/combine
+export BLOCKLIST_INPUT="${BLOCKLIST_LOCATION}"
 
 # Default manual blocklist input file location
 export BLOCKLIST_OVERRIDE_LOCATION="${BLOCKLIST_OVERRIDE_LOCATION:-/etc/nftables.blockcidrs}"
@@ -79,9 +79,10 @@ help()
     echo "-d       Dump current nftables dynamic blocklist and combine with persistent list to create new static blocklist."
     echo "-l       Flush persistent blocklist set in nftables, then load persistent list to blocklist set."
     echo "-r       Dump new blocklist, then flush persistent blocklist set and load static list.  Does not restart nftables."
+    echo "-a       Analyze input blocklist files and report on IP/range/CIDR counts."
     echo "-o       Output path for resulting blocklist file, default is /etc/nftables.blocklist."
     echo "-i       Input path for existing blocklist file to include, default is /etc/nftables.blocklist."
-    echo "-n       Dry run - don\'t actually make changes, just log.  Best used with -v or -vv."
+    echo "-n       Dry run - don't actually make changes, just log.  Best used with -v or -vv."
     echo "-v       Increase verbosity/raise log level.  Default is log level 5 (notice) so -v or -vv will increase to 6 (info) or 7 (debug)."
     echo 
 }
@@ -90,6 +91,12 @@ dump()
 {
     # Dump nftables dynamic blocklist, combine with existing static blocklist, and optimize to new static blocklist
     log 6  "Dumping nftables dynamic blocklist..."
+
+    # If current output file is being overwritten, make a backup first:
+    if [ -e $BLOCKLIST_LOCATION ]; then
+        log 6 "Making backup of existing blocklist at $BLOCKLIST_LOCATION.backup, overwriting any existing backup..."
+        try /bin/cp $BLOCKLIST_LOCATION "$BLOCKLIST_LOCATION.backup"
+    fi
 
     # Dump current dynamic blocklist set contents from nft; use jq and grep to convert to a file with 1 ipv4addr per line
     try /usr/sbin/nft -j list ruleset | \
@@ -107,7 +114,7 @@ dump()
 	exit 1
     fi
 
-    log 6 "Dedup and optimitizing blocklist ranges..."
+    log 6 "Dedup-ing and optimizing blocklist ranges..."
 
     # Use iprange to merge and optimize the list, and include the manual file if it exists
     if [ -e $BLOCKLIST_OVERRIDE_LOCATION ]; then
@@ -139,9 +146,20 @@ flushdynblocklist()
     # Flush the dynamic blocklist set
     log 6 "Flushing the dynamic blocklist..."
     try /usr/sbin/nft flush set $NFTABLES_FILTER $BLOCKLIST_DYN_SET
-
 }
 
+analyze()
+{
+    # Run iprange on the blocklist and output the summary
+    if [ -e $BLOCKLIST_OVERRIDE_LOCATION ]; then
+	    echo "Blocklist IP information from input ($BLOCKLIST_INPUT) and override ($BLOCKLIST_OVERRIDE_LOCATION) files:"
+        try /usr/bin/iprange -v $BLOCKLIST_INPUT $BLOCKLIST_OVERRIDE_LOCATION 2>&1 > /dev/null | grep "totals"
+    else
+	    echo "Blocklist IP information from input ($BLOCKLIST_INPUT) file:"
+        try /usr/bin/iprange -v $BLOCKLIST_INPUT 2>&1 > /dev/null | grep "totals"
+    fi
+}
+        
 
 # Handle options and execute
 
@@ -158,7 +176,7 @@ done
 log 6 "Verbosity level set to $VERBOSITY"
 
 OPTIND=0
-while getopts ":o:i:s:hdlrnv:" opt; do
+while getopts ":o:i:s:hdlranv:" opt; do
   case ${opt} in
     o)
       export BLOCKLIST_LOCATION=${OPTARG}
@@ -176,15 +194,22 @@ while getopts ":o:i:s:hdlrnv:" opt; do
       help
       exit;;
     d)
+      log 7 "Dump function called"
       dump
       exit;;
     l)
+      log 7 "Load function called"
       load 
       exit;;
     r)
+      log 7 "Reload function called"
       dump
       load
       flushdynblocklist
+      exit;;
+    a)
+      log 7 "Analyze function called"
+      analyze
       exit;;
     n)
       # Null - do nothing
