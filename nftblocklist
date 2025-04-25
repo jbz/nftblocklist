@@ -19,33 +19,33 @@ done
 ## Default values
 
 # Default config file location
-export CONFIG_LOCATION="/etc/nftables.conf"
+export NFTABLES_CONFIG_LOCATION="${NFTABLES_CONFIG_LOCATION{:-/etc/nftables.conf}"
 
 # Default persistent blocklist file location
-export BLOCKLIST_LOCATION="/etc/nftables.blocklist"
+export BLOCKLIST_LOCATION="${NFTABLES_CONFIG_LOCATION:-/etc/nftables.blocklist}"
 
 # Locaiton of blocklist to load/combine
-export BLOCKLIST_INPUT=$BLOCKLIST_LOCATION
+export BLOCKLIST_INPUT="${BLOCKLIST_LOCATION:-BLOCKLIST_LOCATION}"
 
 # Default manual blocklist input file location
-export BLOCKLIST_OVERRIDE_LOCATION="/etc/nftables.blockcidrs"
+export BLOCKLIST_OVERRIDE_LOCATION="${BLOCKLIST_OVERRIDE_LOCATION:-/etc/nftables.blockcidrs}"
 
 # Default temp file for blocklist processing
-export BLOCKLIST_TMP_LOCATION="/tmp/nftblocklist.tmp"
+export BLOCKLIST_TMP_LOCATION="${BLOCKLIST_TMP_LOCATION:-/tmp/nftblocklist.tmp}"
 
 # Default nft filter name
-export NFTABLES_FILTER="inet filter"
+export NFTABLES_FILTER="${NFTABLES_FILTER:-inet filter}"
 
 # Default dynamic blocklist set name
-export BLOCKLIST_DYN_SET="blocklist_dyn"
+export BLOCKLIST_DYN_SET="${BLOCKLIST_DYN_SET:-blocklist_dyn}"
 
 # Default persistent blocklist set name
-export BLOCKLIST_PERSISTENT_SET="blocklist_persist"
+export BLOCKLIST_PERSISTENT_SET="${BLOCKLIST_PERSISTENT_SET:-blocklist_persist}"
 
 
 ## Handle logging/output with verbosity levels
 # set default verbosity level to notice
-VERBOSITY=5
+VERBOSITY="${VERBOSITY:-5}"
 
 declare -A LOG_LEVELS
 # https://en.wikipedia.org/wiki/Syslog#Severity_level
@@ -76,11 +76,13 @@ help()
     echo "nftblocklist - a script to manage a persistent nftables IPv4 blocklist."
     echo
     echo "Syntax: $0 [-h] [-d|dump] [-l|load] [-r|reload]"
-    echo "-d|dump       Dump current nftables dynamic blocklist and combine with persistent list to create new static blocklist."
-    echo "-l|load       Flush persistent blocklist set in nftables, then load persistent list to blocklist set."
-    echo "-r|reload     Dump new blocklist, then flush persistent blocklist set and load static list.  Does not restart nftables."
-    echo "-n|null       Dry run - don't actually make changes, just log.  Best used with -v or -vv."
-    echo "-v|verbose    Increase verbosity/raise log level.  Default is log level 5 (notice) so -v or -vv will increase to 6 (info) or 7 (debug)."
+    echo "-d       Dump current nftables dynamic blocklist and combine with persistent list to create new static blocklist."
+    echo "-l       Flush persistent blocklist set in nftables, then load persistent list to blocklist set."
+    echo "-r       Dump new blocklist, then flush persistent blocklist set and load static list.  Does not restart nftables."
+    echo "-o       Output path for resulting blocklist file, default is /etc/nftables.blocklist."
+    echo "-i       Input path for existing blocklist file to include, default is /etc/nftables.blocklist."
+    echo "-n       Dry run - don\'t actually make changes, just log.  Best used with -v or -vv."
+    echo "-v       Increase verbosity/raise log level.  Default is log level 5 (notice) so -v or -vv will increase to 6 (info) or 7 (debug)."
     echo 
 }
 
