@@ -5,6 +5,6 @@ die() { yell "$*"; exit 111; }
 try() { "$@" || die "cannot $*"; }
 
 /usr/sbin/nft -f /etc/nftables.conf
-/usr/sbin/nftblocklistload
+/usr/sbin/nftblocklist -l
 
 true
